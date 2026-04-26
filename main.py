@@ -79,21 +79,27 @@ def download_arxiv_source(url: str, output_dir: Path) -> None:
         raise ValueError(f"Not an arXiv URL: {url}")
 
     paper_dir = unique_path(output_dir / sanitize_name(arxiv_id))
-    paper_dir.mkdir(parents=True)
 
-    source_url = f"https://arxiv.org/e-print/{arxiv_id}"
-    print(f"Downloading {source_url} -> {paper_dir}")
+    with tempfile.TemporaryDirectory(prefix="arxiv-source-") as temp_root:
+        raw_dir = Path(temp_root) / "source"
+        raw_dir.mkdir()
 
-    request = urllib.request.Request(
-        source_url,
-        headers={"User-Agent": "metadata-source-downloader/1.0"},
-    )
-    with tempfile.NamedTemporaryFile(prefix="arxiv-source-") as download:
-        with urllib.request.urlopen(request) as response:
-            shutil.copyfileobj(response, download)
-        download.flush()
+        source_url = f"https://arxiv.org/e-print/{arxiv_id}"
+        print(f"Downloading {source_url} -> {paper_dir}")
 
-        extract_source(Path(download.name), paper_dir, arxiv_id)
+        request = urllib.request.Request(
+            source_url,
+            headers={"User-Agent": "metadata-source-downloader/1.0"},
+        )
+        with tempfile.NamedTemporaryFile(prefix="arxiv-source-") as download:
+            with urllib.request.urlopen(request) as response:
+                shutil.copyfileobj(response, download)
+            download.flush()
+
+            extract_source(Path(download.name), raw_dir, arxiv_id)
+
+        cleaned_dir = clean_arxiv_source(raw_dir)
+        shutil.move(str(cleaned_dir), paper_dir)
 
 
 def extract_source(source_file: Path, destination: Path, arxiv_id: str) -> None:
@@ -120,6 +126,38 @@ def extract_source(source_file: Path, destination: Path, arxiv_id: str) -> None:
         pass
 
     shutil.copy2(source_file, destination / f"{sanitize_name(arxiv_id)}.source")
+
+
+def clean_arxiv_source(source_dir: Path) -> Path:
+    from arxiv_latex_cleaner.arxiv_latex_cleaner import run_arxiv_cleaner
+
+    print(f"Cleaning arXiv source in {source_dir}")
+    parameters = {
+        "input_folder": str(source_dir),
+        "resize_images": False,
+        "im_size": 500,
+        "compress_pdf": False,
+        "pdf_im_resolution": 500,
+        "images_allowlist": {},
+        "keep_bib": False,
+        "commands_to_delete": [],
+        "commands_only_to_delete": [],
+        "environments_to_delete": [],
+        "if_exceptions": [],
+        "use_external_tikz": None,
+        "svg_inkscape": None,
+        "convert_png_to_jpg": False,
+        "png_quality": 50,
+        "png_size_threshold": 0.5,
+        "verbose": False,
+    }
+    run_arxiv_cleaner(parameters)
+
+    cleaned_dir = source_dir.with_name(f"{source_dir.name}_arXiv")
+    if not cleaned_dir.is_dir():
+        raise RuntimeError(f"arxiv-latex-cleaner did not create {cleaned_dir}")
+
+    return cleaned_dir
 
 
 def create_symlink(line: str, output_dir: Path) -> None:

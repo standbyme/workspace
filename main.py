@@ -13,6 +13,7 @@ from pathlib import Path
 
 
 ARXIV_HOSTS = {"arxiv.org", "www.arxiv.org"}
+WORKDIR = Path("workdir")
 ARXIV_ID_RE = re.compile(
     r"^(?P<id>(?:[a-z-]+(?:\.[A-Z]{2})?/\d{7}|\d{4}\.\d{4,5})(?:v\d+)?)"
 )
@@ -25,7 +26,7 @@ def parse_args() -> argparse.Namespace:
             "sources and symlinks to local paths."
         )
     )
-    parser.add_argument("name", help="Folder to create/populate")
+    parser.add_argument("name", help="Folder name to create/populate under workdir/")
     parser.add_argument(
         "--metadata",
         default="metadata.txt",
@@ -148,12 +149,15 @@ def process_metadata(metadata_file: Path, output_dir: Path) -> None:
 
 def main() -> None:
     args = parse_args()
-    output_dir = Path(args.name)
+    output_name = Path(args.name)
     metadata_file = Path(args.metadata)
 
     if not metadata_file.is_file():
         raise FileNotFoundError(f"Metadata file does not exist: {metadata_file}")
+    if output_name.is_absolute():
+        raise ValueError("name must be relative so the output stays under workdir/")
 
+    output_dir = WORKDIR / output_name
     output_dir.mkdir(parents=True, exist_ok=True)
     process_metadata(metadata_file, output_dir)
 

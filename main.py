@@ -26,7 +26,7 @@ def parse_args() -> argparse.Namespace:
             "sources and symlinks to local paths."
         )
     )
-    parser.add_argument("name", help="Folder name to create/populate under workdir/")
+    parser.add_argument("--name", help="Folder name to create/populate under workdir/")
     parser.add_argument(
         "--metadata",
         default="metadata.txt",
